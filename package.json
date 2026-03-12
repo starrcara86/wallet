@@ -116,6 +116,16 @@
   "jest": {
     "transformIgnorePatterns": [
       "/node_modules/(?!(ambire-common|react-donut-chart|validator))"
+    ],
+    "watchPathIgnorePatterns": [
+      "<rootDir>/.git",
+      "<rootDir>/build",
+      "<rootDir>/coverage",
+      "[/\\\\]\\.cargo[/\\\\]"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/build",
+      "[/\\\\]\\.cargo[/\\\\]"
     ]
   }
 }
