@@ -5,35 +5,16 @@ import accountPresets from 'ambire-common/src/constants/accountPresets'
 import { Bundle } from 'adex-protocol-eth/js'
 import cn from 'classnames'
 
-import { getWallet } from 'lib/getWallet'
 import { fetchPost } from 'lib/fetch'
-import { getProvider } from 'ambire-common/src/services/provider'
 
 import { useToasts } from 'hooks/toasts'
 import { Button, TextInput } from 'components/common'
 import { isTokenEligible, getFeesData, toHexAmount } from 'components/SendTransaction/helpers'
-import { sendNoRelayer } from 'components/SendTransaction/noRelayer'
+import { getErrorMessage, execute } from 'components/SendTransaction/Actions'
 
 import styles from './Actions.module.scss'
 
 const ERC20 = new Interface(require('adex-protocol-eth/abi/ERC20'))
-
-function getErrorMessage(e) {
-  if (e && e.message === 'NOT_TIME') {
-    return "Your 72 hour recovery waiting period still hasn't ended. You will be able to use your account after this lock period."
-  }
-  if (e && e.message === 'WRONG_ACC_OR_NO_PRIV') {
-    return 'Unable to sign with this email/password account. Please contact support.'
-    // NOTE: is INVALID_SIGNATURE even a real error?
-  }
-  if (e && e.message === 'INVALID_SIGNATURE') {
-    return 'Invalid signature. This may happen if you used password/derivation path on your hardware wallet.'
-  }
-  if (e && e.message === 'INSUFFICIENT_PRIVILEGE') {
-    return 'Wrong signature. This may happen if you used password/derivation path on your hardware wallet.'
-  }
-  return e.message || e
-}
 
 const Actions = ({
   signingStatus,
@@ -165,53 +146,23 @@ const Actions = ({
     if (!estimation) throw new Error('no estimation: should never happen')
 
     const finalBundle = getFinalBundle()
-    const provider = getProvider(network.id)
-    const signer = finalBundle.signer
 
     // a bit redundant cause we already called it at the beginning of approveTxn, but
     // we need to freeze finalBundle in the UI in case signing takes a long time (currently only to freeze the fee selector)
     setSigningStatus({ inProgress: true, finalBundle })
 
-    const wallet = getWallet({
-      signer,
-      signerExtra: account.signerExtra,
-      chainId: network.chainId
-    })
-
-    if (
-      wallet.isUnlocked && !(await wallet.isUnlocked())
-    )
-      addToast(
-        'Please unlock or connect your Web3 wallet before proceeding with signing this transaction.',
-        { warning: true }
-      )
-    if(wallet.web3eth_requestAccounts){
-      const TIME_TO_UNLOCK = 30 * 1000
-      let tooLateToUnlock = false
-      const timeout = setTimeout(() => {
-        tooLateToUnlock = true
-      }, TIME_TO_UNLOCK)
-      // prompts the user to unlock extension
-      await wallet.web3eth_requestAccounts()
-      if (tooLateToUnlock) throw new Error('Too slow to unlock web3 wallet')
-      clearTimeout(timeout)
-    }
-    
-    if (relayerURL) {
-      // Temporary way of debugging the fee cost
-      // const initialLimit = finalBundle.gasLimit - getFeePaymentConsequences(estimation.selectedFeeToken, estimation).addedGas
-      // finalBundle.estimate({ relayerURL, fetch }).then(estimation => console.log('fee costs: ', estimation.gasLimit - initialLimit), estimation.selectedFeeToken).catch(console.error)
-      await finalBundle.sign(wallet)
-      return await finalBundle.submit({ relayerURL, fetch })
-    }
-    return sendNoRelayer({
+    return execute({
       finalBundle,
       account,
       network,
-      wallet,
+      relayerURL,
       estimation,
       feeSpeed,
-      provider
+      onUnlockRequired: () =>
+        addToast(
+          'Please unlock or connect your Web3 wallet before proceeding with signing this transaction.',
+          { warning: true }
+        )
     })
   }
 
